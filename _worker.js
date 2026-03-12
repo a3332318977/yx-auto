@@ -249,29 +249,44 @@ async function generateTrojanLinksFromSource(list, user, workerDomain, disableNo
 function generateVMessLinksFromSource(list, user, workerDomain, disableNonTLS = false, customPath = '/', echConfig = null) {
     const CF_HTTP_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095];
     const CF_HTTPS_PORTS = [443, 2053, 2083, 2087, 2096, 8443];
+    const defaultHttpsPorts = [443];
+    const defaultHttpPorts = disableNonTLS ? [] : [80];
     const links = [];
     const wsPath = customPath || '/';
 
     list.forEach(item => {
         let nodeNameBase = item.isp ? item.isp.replace(/\s/g, '_') : (item.name || item.domain || item.ip);
-        if (item.colo) nodeNameBase += `-${item.colo.trim()}`;
+        if (item.colo && item.colo.trim()) {
+            nodeNameBase = `${nodeNameBase}-${item.colo.trim()}`;
+        }
         const safeIP = item.ip.includes(':') ? `[${item.ip}]` : item.ip;
-
+        
         let portsToGenerate = [];
+        
         if (item.port) {
-            const p = item.port;
-            if (CF_HTTPS_PORTS.includes(p)) portsToGenerate.push({port: p, tls: true});
-            else if (CF_HTTP_PORTS.includes(p) && !disableNonTLS) portsToGenerate.push({port: p, tls: false});
-            else portsToGenerate.push({port: p, tls: true});
+            const port = item.port;
+            if (CF_HTTPS_PORTS.includes(port)) {
+                portsToGenerate.push({ port: port, tls: true });
+            } else if (CF_HTTP_PORTS.includes(port)) {
+                if (!disableNonTLS) {
+                    portsToGenerate.push({ port: port, tls: false });
+                }
+            } else {
+                portsToGenerate.push({ port: port, tls: true });
+            }
         } else {
-            [443].forEach(p => portsToGenerate.push({port: p, tls: true}));
-            if (!disableNonTLS) [80].forEach(p => portsToGenerate.push({port: p, tls: false}));
+            defaultHttpsPorts.forEach(port => {
+                portsToGenerate.push({ port: port, tls: true });
+            });
+            defaultHttpPorts.forEach(port => {
+                portsToGenerate.push({ port: port, tls: false });
+            });
         }
 
-        portsToGenerate.forEach(({port, tls}) => {
+        portsToGenerate.forEach(({ port, tls }) => {
             const vmessConfig = {
                 v: "2",
-                ps: tls ? `\( {nodeNameBase}- \){port}-VMess-WS-TLS` : `\( {nodeNameBase}- \){port}-VMess-WS`,
+                ps: tls ? `${nodeNameBase}-${port}-VMess-WS-TLS` : `${nodeNameBase}-${port}-VMess-WS`,
                 add: safeIP,
                 port: port.toString(),
                 id: user,
@@ -287,16 +302,19 @@ function generateVMessLinksFromSource(list, user, workerDomain, disableNonTLS = 
                 vmessConfig.sni = workerDomain;
                 vmessConfig.fp = "chrome";
             }
-
-            // 标准中文编码（已确认有效）
+            
+            // 核心修复：处理中文编码，防止 btoa 报错
             const jsonStr = JSON.stringify(vmessConfig);
-            const vmessBase64 = btoa(unescape(encodeURIComponent(jsonStr)));
-
+            const vmessBase64 = btoa(encodeURIComponent(jsonStr).replace(/%([0-9A-F]{2})/g,
+                function toSolidBytes(match, p1) {
+                    return String.fromCharCode('0x' + p1);
+            }));
+            
             links.push(`vmess://${vmessBase64}`);
         });
     });
     return links;
-}
+                                      }
 // ==================== 订阅主逻辑（修复2：egi全协议支持） ====================
 async function handleSubscriptionRequest(request, user, customDomain, piu, ipv4Enabled, ipv6Enabled, ispMobile, ispUnicom, ispTelecom, evEnabled, etEnabled, vmEnabled, disableNonTLS, customPath, echConfig = null) {
     const url = new URL(request.url);
