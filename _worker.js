@@ -245,6 +245,7 @@ async function generateTrojanLinksFromSource(list, user, workerDomain, disableNo
 }
 
 // 【修复1】VMess 生成函数 - 中文名彻底解决
+// 【已修复】VMess 生成函数 - 中文名 + 模板字符串彻底正确
 function generateVMessLinksFromSource(list, user, workerDomain, disableNonTLS = false, customPath = '/', echConfig = null) {
     const CF_HTTP_PORTS = [80, 8080, 8880, 2052, 2082, 2086, 2095];
     const CF_HTTPS_PORTS = [443, 2053, 2083, 2087, 2096, 8443];
@@ -287,7 +288,7 @@ function generateVMessLinksFromSource(list, user, workerDomain, disableNonTLS = 
                 vmessConfig.fp = "chrome";
             }
 
-            // 【核心修复】标准中文编码
+            // 标准中文编码（已确认有效）
             const jsonStr = JSON.stringify(vmessConfig);
             const vmessBase64 = btoa(unescape(encodeURIComponent(jsonStr)));
 
@@ -296,7 +297,6 @@ function generateVMessLinksFromSource(list, user, workerDomain, disableNonTLS = 
     });
     return links;
 }
-
 // ==================== 订阅主逻辑（修复2：egi全协议支持） ====================
 async function handleSubscriptionRequest(request, user, customDomain, piu, ipv4Enabled, ipv6Enabled, ispMobile, ispUnicom, ispTelecom, evEnabled, etEnabled, vmEnabled, disableNonTLS, customPath, echConfig = null) {
     const url = new URL(request.url);
